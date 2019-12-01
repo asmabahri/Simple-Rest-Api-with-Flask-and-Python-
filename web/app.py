@@ -1,9 +1,131 @@
+"""
+Registration of a user 0 tokens
+each user gets 10 tokens
+store a sentence on our database for 1 token
+retrive his store sentence on our database for 1 token
+
+"""
+
 from flask import Flask, jsonify, request
 from flask_restful import Api, Resource
-
+from pymongo import MongoClient
+import bcrypt
 
 app = Flask(__name__)
 api = Api(app)
+client = MongoClient("mongodb://db:27017")
+db = client.SentencesDatabase
+users = db["users"]
+
+class register(Resource):
+   def Post(self):
+    #step1 is to get posted data by the user
+    postedData = request.get_json()
+    
+    #get the data
+    username = postedData["username"]
+    password = postedData["password"]
+
+    #hash[password+salt]=hashing the passwords using py-Bcrypt
+    hashed_pw= bcrypt.hashpw(password.encode('utf8'), bcrypt.gensalt())
+
+    #store pass and username to the db
+    users.insert({
+        "username":username,
+        "password":hashed_pw,
+        "sentence":"",
+        "Tokens": 6
+        })
+
+    retJson= {
+       "Status":200,
+       "msg": "you successfully signed up for Api"
+    }
+    return jsonify(retJson)
+
+
+def verify_pw(username,password):
+    hashed_pw = users.find({
+        "username":username,
+
+        })[0]["password"]
+    if bcrypt.hashpw(password.encode('utf8'), hashed_pw) == hashed_pw:
+        return True
+    else:
+         return False   
+def  countTokens(username):
+    tokens = users.find({
+        "username":username
+        #access the usre's tokens
+    })[0]["Tokens"] 
+    return tokens         
+class store(Resource):
+    def Post(self):
+        postedData = request.get_json()
+
+        username = postedData["username"]
+        password = postedData["password"]
+        sentence = postedData["sentence"]
+        #verify username pw match
+
+        correct_pw = verify(username, password)
+        if not correct_pw:
+            retJson= {
+                "Status":302
+            }
+            return jsonify(retJson)
+
+        #verify user have enough 
+        num_tokens = countTokens(username)
+        if not num_tokens <= 0:
+            retJson = { 
+                "Status": 301
+            }
+            return jsonify(retJson)
+        users.update({{
+            "username": username
+            },
+            {"$set":{"sentence":sentence},
+            "Tokens":num_tokens-1}
+        })   
+        retJson = {
+           "Status":200,
+           "msg": "sentence saved successfully"
+
+        } 
+        return jsonify(retJson)
+
+
+
+api.add_resource(register,"/register")
+api.add_resource(store,"/store")
+if __name__=="__main__":
+    app.run(host='0.0.0.0')
+
+"""
+from flask import Flask, jsonify, request
+from flask_restful import Api, Resource
+import os
+
+from pymongo import MongoClient
+
+app = Flask(__name__)
+api = Api(app)
+
+client = MongoClient("mongodb://db:27017")
+db = client.aNewDB
+UserNum = db["UserNum"]
+
+UserNum.insert({
+    'num_of_users':0
+})
+
+class Visit(Resource):
+    def get(self):
+        prev_num = UserNum.find({})[0]['num_of_users']
+        new_num = prev_num + 1
+        UserNum.update({}, {"$set":{"num_of_users":new_num}})
+        return str("Hello user " + str(new_num))
 
 
 def checkPostedData(postedData, functionName):
@@ -153,6 +275,7 @@ api.add_resource(Add, "/add")
 api.add_resource(Subtract, "/subtract")
 api.add_resource(Multiply, "/multiply")
 api.add_resource(Divide, "/division")
+api.add_resource(Visit, "/hello")
 
 @app.route('/')
 def hello_world():
@@ -160,4 +283,5 @@ def hello_world():
 
 
 if __name__=="__main__":
-    app.run(host="0.0.0.0", port=os.environ.get('PORT'))
+    app.run(host='0.0.0.0')
+"""
